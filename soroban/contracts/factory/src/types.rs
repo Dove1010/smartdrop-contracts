@@ -81,4 +81,8 @@ pub enum FactoryError {
     InvalidGlobalMultiplier = 7,
     /// `create_pool` cannot allocate another monotonically increasing pool ID.
     PoolCountOverflow = 8,
+    /// `upgrade_pool` was called on a pool whose own stored admin no longer
+    /// matches the factory's current admin (the two diverge once either side
+    /// calls its own `transfer_admin` independently — see `upgrade_pool`'s docs).
+    PoolAdminMismatch = 9,
 }

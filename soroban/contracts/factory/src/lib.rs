@@ -352,6 +352,17 @@ impl Factory {
     ///
     /// This deliberately does not update the factory-level `WasmHash`; it is a
     /// pool-by-pool hot swap for a pre-installed WASM hash.
+    ///
+    /// A pool's admin is fixed to the factory's admin *at creation time*
+    /// (see `create_pool`'s docs) and does not follow later `transfer_admin`
+    /// calls on either the factory or the pool itself. The pool's own
+    /// `upgrade` entry point independently requires its stored admin's
+    /// authorization, so once the two admins diverge, this factory-admin-gated
+    /// call would silently also need a second signature from the pool's
+    /// (possibly unrelated) admin to succeed. Rather than let that surface as
+    /// an opaque missing-authorization host trap, check the pool's current
+    /// admin against the factory's admin up front and fail with a typed
+    /// `PoolAdminMismatch` error when they no longer match.
     pub fn upgrade_pool(
         env: Env,
         pool_id: u32,
@@ -368,6 +379,13 @@ impl Factory {
             .get::<DataKey, PoolRecord>(&key)
             .ok_or(FactoryError::PoolNotFound)?;
         bump_pool(&env, pool_id);
+
+        let pool_admin_args: Vec<Val> = vec![&env];
+        let pool_admin: Address =
+            env.invoke_contract(&record.address, &Symbol::new(&env, "admin"), pool_admin_args);
+        if pool_admin != admin {
+            return Err(FactoryError::PoolAdminMismatch);
+        }
 
         let upgrade_args: Vec<Val> = vec![&env, new_wasm_hash.clone().into_val(&env)];
         let _: () =
